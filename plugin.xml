@@ -1,0 +1,7 @@
+<library path="libros_openni2_multicam">
+  <class name="ros_openni2_multicam/OpenNIDriver" type="ros_openni2_multicam::OpenNIDriver" base_class_type="nodelet::Nodelet">
+    <description>
+      Custom OpenNI2 driver for the sensor head
+    </description>
+  </class>
+</library>

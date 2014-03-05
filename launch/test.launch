@@ -1,0 +1,6 @@
+<launch>
+  <node name="openni2_multicam" pkg="nodelet" type="nodelet" args="manager" output="screen" />
+  <node name="ros_openni2_multicam" pkg="nodelet" type="nodelet" args="load ros_openni2_multicam/OpenNIDriver openni2_multicam" output="screen" />
+
+  <include file="$(find ros_openni2_multicam)/launch/frames.launch" />
+</launch>
