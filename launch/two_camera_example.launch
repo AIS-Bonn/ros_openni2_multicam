@@ -1,0 +1,30 @@
+<launch>
+  <node name="vision_manager" pkg="nodelet" type="nodelet" args="manager" output="screen" />
+
+  <node name="ros_openni2_multicam" pkg="nodelet" type="nodelet" args="load ros_openni2_multicam/OpenNIDriver vision_manager" output="screen">
+<rosparam>
+data_skip: 1
+width: 640
+height: 480
+cameras:
+ - serial_number: "1306060098"
+   topic: "/openni_a"
+ - serial_number: "1306060188"
+   topic: "/openni_b"
+</rosparam>
+  </node>
+
+  <arg name="publish_tf" default="true" />
+  <group if="$(arg publish_tf)">
+    <include file="$(find ros_openni2_multicam)/launch/frames.launch">
+      <arg name="camera" value="openni_a" />
+    </include>
+    <include file="$(find ros_openni2_multicam)/launch/frames.launch">
+      <arg name="camera" value="openni_b" />
+    </include>
+    <node pkg="tf" type="static_transform_publisher" name="openni_a_base"
+          args="0 -1 0 0 0 0 base_link openni_a_link 100" />  
+    <node pkg="tf" type="static_transform_publisher" name="openni_b_base"
+          args="0 1 0 0 0 0 base_link openni_b_link 100" />  
+  </group>
+</launch>
