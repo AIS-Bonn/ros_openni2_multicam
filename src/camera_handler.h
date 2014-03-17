@@ -37,6 +37,7 @@ namespace ros_openni2_multicam
       void step();
       void reopenDevice();
       void publishPointCloud();
+      void publishPointCloudDirectly();
 
       boost::shared_ptr<openni::Device> m_device;
       std::string m_id;

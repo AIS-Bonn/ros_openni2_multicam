@@ -26,10 +26,10 @@ typedef union
 {
   struct
   {
-    unsigned char Blue;
-    unsigned char Green;
-    unsigned char Red;
-    unsigned char Alpha;
+    unsigned char b;
+    unsigned char g;
+    unsigned char r;
+    unsigned char a;
   };
   float float_value;
   long long_value;
@@ -296,6 +296,7 @@ namespace ros_openni2_multicam
         m_pub_color.publish(m_colorImage, info);
 
         publishPointCloud();
+        // publishPointCloudDirectly();
 
         break;
       }
@@ -435,10 +436,10 @@ namespace ros_openni2_multicam
 
         // Fill in color
         RGBValue color;
-        color.Red   = rgb[0];
-        color.Green = rgb[1];
-        color.Blue  = rgb[2];
-        color.Alpha = 0;
+        color.r = rgb[0];
+        color.g = rgb[1];
+        color.b = rgb[2];
+        color.a = 0;
         point.rgb = color.float_value;
       }
     }
@@ -450,6 +451,107 @@ namespace ros_openni2_multicam
 #else
     pcl::toROSMsg(*cloud_pcl, *cloud);
 #endif
+    m_pub_cloud.publish(cloud);
+  }
+
+
+  void CameraHandler::publishPointCloudDirectly()
+  {
+    ros::Time now = ros::Time::now();
+
+    if(!m_colorImage || !m_depthImage)
+      return;
+
+    if(m_colorImage->width != m_depthImage->width || m_colorImage->height != m_depthImage->height)
+    {
+      ROS_ERROR("Color and depth images do not have the same size! Cannot publish point cloud.");
+      return;
+    }
+	
+    sensor_msgs::PointCloud2::Ptr cloud = boost::make_shared<sensor_msgs::PointCloud2>();
+
+    cloud->header.stamp = now;
+    cloud->header.frame_id = m_name + "_rgb_optical_frame";
+
+    cloud->fields.resize(6);
+    cloud->fields[0].name = "x";
+    cloud->fields[1].name = "y";
+    cloud->fields[2].name = "z";
+    cloud->fields[3].name = "_";
+    cloud->fields[4].name = "rgb";
+    cloud->fields[5].name = "_";
+    int channel_offset = 0;
+    for (int i = 0; i < 6; ++i, channel_offset += 4)
+    {
+      cloud->fields[i].offset = channel_offset;
+      cloud->fields[i].datatype = sensor_msgs::PointField::FLOAT32;
+      cloud->fields[i].count = 1;
+    }
+    cloud->fields[3].datatype = sensor_msgs::PointField::UINT8;
+    cloud->fields[3].count = 4;
+    cloud->fields[5].datatype = sensor_msgs::PointField::UINT8;
+    cloud->fields[5].count = 12;
+    channel_offset += 8;
+
+    cloud->width = m_colorImage->width;
+    cloud->height = m_colorImage->height;
+    cloud->point_step = channel_offset;
+    cloud->is_bigendian = 0;
+    cloud->is_dense = 1;
+    cloud->row_step = cloud->point_step * cloud->width;
+    cloud->data.resize(cloud->row_step * cloud->height);
+
+    uint16_t* depth_ptr = (uint16_t*)m_depthImage->data.data();
+    uint8_t* out_ptr = cloud->data.data();
+    uint8_t* color = m_colorImage->data.data();
+
+    float constant = 1.0 / 1000.0 / m_focalLength;
+    float bad = std::numeric_limits<float>::quiet_NaN();
+    float mid_x = m_colorImage->width / 2.0 - 0.5;
+    float mid_y = m_colorImage->height / 2.0 - 0.5;
+	
+    RGBValue rgb;
+    rgb.a = 255;
+
+    if(!color)
+      return;
+
+    for(unsigned int y = 0; y < m_colorImage->height; ++y)
+    {
+      for(unsigned int x = 0; x < m_colorImage->width; ++x)
+      {
+        float px;
+        float py;
+        float pz;
+
+        if(*depth_ptr == 0)
+        {
+          px = py = pz = bad;
+        }
+        else
+        {
+          float depth = (*depth_ptr);
+          px = (((float)x) - mid_x) * depth * constant;
+          py = (((float)y) - mid_y) * depth * constant;
+          pz = depth / 1000.0;
+        }
+
+        *((float*)(out_ptr + cloud->fields[0].offset)) = px;
+        *((float*)(out_ptr + cloud->fields[1].offset)) = py;
+        *((float*)(out_ptr + cloud->fields[2].offset)) = pz;
+			
+        rgb.r = color[0];
+        rgb.g = color[1];
+        rgb.b = color[2];
+
+        *((float*)(out_ptr + cloud->fields[4].offset)) = rgb.float_value;
+
+        out_ptr += cloud->point_step;
+        depth_ptr++;
+        color += 3;
+      }
+    }
+
     m_pub_cloud.publish(cloud);
   }
 
