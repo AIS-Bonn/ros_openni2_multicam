@@ -111,7 +111,7 @@ namespace ros_openni2_multicam
     std::map<std::string, std::string> nameMap;
 
     int defaultDataSkip;
-    nh.param("data_skip", defaultDataSkip, 10);
+    nh.param("data_skip", defaultDataSkip, -1);
 
     int defaultWidth;
     nh.param("width", defaultWidth, 640);
