@@ -1,6 +1,35 @@
-// Handles one camera
-// Author: Max Schwarz <max.schwarz@uni-bonn.de>
-// Contact (package maintainer): Dirk Holz <holz@ais.uni-bonn.de>
+/* -*- Mode: c++; tab-width: 2; c-basic-offset: 2; indent-tabs-mode: nil -*- */
+/* vim:set softtabstop=2 shiftwidth=2 tabstop=2 expandtab: */
+/* 
+ * Software License Agreement (BSD License)
+ * 
+ * Copyright (c) 2014, Autonomous Intelligent Systems Group, Rheinische
+ * Friedrich-Wilhelms-Universität Bonn
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the Rheinische Friedrich-Wilhelms-Universität Bonn
+ *       nor the names of its contributors may be used to endorse or promote
+ *       products derived from this software without specific prior written
+ *       permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include "camera_handler.h"
 
@@ -12,14 +41,6 @@
 
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/distortion_models.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <pcl/point_types.h>
-#include <pcl/point_cloud.h>
-#if (defined PCL_MINOR_VERSION && (PCL_MINOR_VERSION >= 7))
-#include <pcl_conversions/pcl_conversions.h>
-#else
-#include <pcl/ros/conversions.h>
-#endif
 #include <sstream>
 
 typedef union
@@ -55,7 +76,7 @@ namespace ros_openni2_multicam
   {
     m_pub_color = m_it.advertiseCamera(name + "/rgb/image_color", 1);
     m_pub_depth = m_it.advertise(name + "/depth_registered", 1);
-    m_pub_cloud = m_nh->advertise<sensor_msgs::PointCloud2>(name + "/depth_registered/points", 1);
+    m_pub_cloud = m_nh->advertise<PointCloud>(name + "/depth_registered/points", 1);
 
     // Start grabber thread
     m_shouldExit = false;
@@ -386,25 +407,18 @@ namespace ros_openni2_multicam
       return;
     }
 	
-    sensor_msgs::PointCloud2::Ptr cloud = boost::make_shared<sensor_msgs::PointCloud2>();
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_pcl(new pcl::PointCloud<pcl::PointXYZRGB>);
+    PointCloud::Ptr cloud(new PointCloud);
 #if (defined PCL_MINOR_VERSION && (PCL_MINOR_VERSION >= 7))
-    cloud_pcl->header.stamp = now.toNSec() / 1e3;
+    cloud->header = pcl_conversions::toPCL(m_depthImage->header);
 #else
-    cloud_pcl->header.stamp = now;
+    cloud->header = m_depthImage->header;
 #endif
-
-    cloud_pcl->header.frame_id = m_name + "_rgb_optical_frame";
-  
-    cloud_pcl->width = m_colorImage->width;
-    cloud_pcl->height = m_colorImage->height;
-    cloud_pcl->is_dense = false;
-    cloud_pcl->points.resize(cloud_pcl->width * cloud_pcl->height);
-
+    cloud->width = m_colorImage->width;
+    cloud->height = m_colorImage->height;
+    cloud->is_dense = false;
+    cloud->points.resize(cloud->width * cloud->height);
 
     float constant = 1.0 / 1000.0 / m_focalLength;
-    float bad = std::numeric_limits<float>::quiet_NaN();
     float mid_x = m_colorImage->width / 2.0 - 0.5;
     float mid_y = m_colorImage->height / 2.0 - 0.5;
 	
@@ -416,17 +430,17 @@ namespace ros_openni2_multicam
     int row_step = m_depthImage->step / sizeof(uint16_t);
     const uint8_t* rgb = &m_colorImage->data[0];
     int rgb_skip = m_colorImage->step - m_colorImage->width * color_step;
-    pcl::PointCloud<pcl::PointXYZRGB>::iterator pt_iter = cloud_pcl->begin ();
+    PointCloud::iterator pt_iter = cloud->begin ();
 
     for (unsigned int v = 0; v < m_colorImage->height; ++v, depth_ptr += row_step, rgb += rgb_skip)
     {
       for (unsigned int u = 0; u < m_colorImage->width; ++u, rgb += color_step)
       {
-        pcl::PointXYZRGB& point = *pt_iter++;
+        PointType& point = *pt_iter++;
         uint16_t depth = depth_ptr[u];
 
         if(depth == 0)
-          point.x = point.y = point.z = bad;
+          point.x = point.y = point.z = std::numeric_limits<float>::quiet_NaN();
         else
         {
           point.x = (((float)u) - mid_x) * static_cast<float>(depth) * constant;
@@ -441,114 +455,6 @@ namespace ros_openni2_multicam
         color.b = rgb[2];
         color.a = 0;
         point.rgb = color.float_value;
-      }
-    }
-
-#if (defined PCL_MINOR_VERSION && (PCL_MINOR_VERSION >= 7))
-    pcl::PCLPointCloud2 cloud_pcl2;
-    pcl::toPCLPointCloud2(*cloud_pcl, cloud_pcl2);
-    pcl_conversions::fromPCL(cloud_pcl2, *cloud);
-#else
-    pcl::toROSMsg(*cloud_pcl, *cloud);
-#endif
-    m_pub_cloud.publish(cloud);
-  }
-
-
-  void CameraHandler::publishPointCloudDirectly()
-  {
-    ros::Time now = ros::Time::now();
-
-    if(!m_colorImage || !m_depthImage)
-      return;
-
-    if(m_colorImage->width != m_depthImage->width || m_colorImage->height != m_depthImage->height)
-    {
-      ROS_ERROR("Color and depth images do not have the same size! Cannot publish point cloud.");
-      return;
-    }
-	
-    sensor_msgs::PointCloud2::Ptr cloud = boost::make_shared<sensor_msgs::PointCloud2>();
-
-    cloud->header.stamp = now;
-    cloud->header.frame_id = m_name + "_rgb_optical_frame";
-
-    cloud->fields.resize(6);
-    cloud->fields[0].name = "x";
-    cloud->fields[1].name = "y";
-    cloud->fields[2].name = "z";
-    cloud->fields[3].name = "_";
-    cloud->fields[4].name = "rgb";
-    cloud->fields[5].name = "_";
-    int channel_offset = 0;
-    for (int i = 0; i < 6; ++i, channel_offset += 4)
-    {
-      cloud->fields[i].offset = channel_offset;
-      cloud->fields[i].datatype = sensor_msgs::PointField::FLOAT32;
-      cloud->fields[i].count = 1;
-    }
-    cloud->fields[3].datatype = sensor_msgs::PointField::UINT8;
-    cloud->fields[3].count = 4;
-    cloud->fields[5].datatype = sensor_msgs::PointField::UINT8;
-    cloud->fields[5].count = 12;
-    channel_offset += 8;
-
-    cloud->width = m_colorImage->width;
-    cloud->height = m_colorImage->height;
-    cloud->point_step = channel_offset;
-    cloud->is_bigendian = 0;
-    cloud->is_dense = 1;
-    cloud->row_step = cloud->point_step * cloud->width;
-    cloud->data.resize(cloud->row_step * cloud->height);
-
-    uint16_t* depth_ptr = (uint16_t*)m_depthImage->data.data();
-    uint8_t* out_ptr = cloud->data.data();
-    uint8_t* color = m_colorImage->data.data();
-
-    float constant = 1.0 / 1000.0 / m_focalLength;
-    float bad = std::numeric_limits<float>::quiet_NaN();
-    float mid_x = m_colorImage->width / 2.0 - 0.5;
-    float mid_y = m_colorImage->height / 2.0 - 0.5;
-	
-    RGBValue rgb;
-    rgb.a = 255;
-
-    if(!color)
-      return;
-
-    for(unsigned int y = 0; y < m_colorImage->height; ++y)
-    {
-      for(unsigned int x = 0; x < m_colorImage->width; ++x)
-      {
-        float px;
-        float py;
-        float pz;
-
-        if(*depth_ptr == 0)
-        {
-          px = py = pz = bad;
-        }
-        else
-        {
-          float depth = (*depth_ptr);
-          px = (((float)x) - mid_x) * depth * constant;
-          py = (((float)y) - mid_y) * depth * constant;
-          pz = depth / 1000.0;
-        }
-
-        *((float*)(out_ptr + cloud->fields[0].offset)) = px;
-        *((float*)(out_ptr + cloud->fields[1].offset)) = py;
-        *((float*)(out_ptr + cloud->fields[2].offset)) = pz;
-			
-        rgb.r = color[0];
-        rgb.g = color[1];
-        rgb.b = color[2];
-
-        *((float*)(out_ptr + cloud->fields[4].offset)) = rgb.float_value;
-
-        out_ptr += cloud->point_step;
-        depth_ptr++;
-        color += 3;
       }
     }
 
