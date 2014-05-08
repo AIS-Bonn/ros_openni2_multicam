@@ -76,6 +76,7 @@ namespace ros_openni2_multicam
   {
     m_pub_color = m_it.advertiseCamera(name + "/rgb/image_color", 1);
     m_pub_depth = m_it.advertise(name + "/depth_registered", 1);
+    m_pub_rect  = m_it.advertise(name + "/rgb/image_rect", 1);
     m_pub_cloud = m_nh->advertise<PointCloud>(name + "/depth_registered/points", 1);
 
     // Start grabber thread
@@ -316,8 +317,21 @@ namespace ros_openni2_multicam
 
         m_pub_color.publish(m_colorImage, info);
 
+        if (m_pub_rect.getNumSubscribers() != 0)
+        {
+          image_geometry::PinholeCameraModel model;
+          model.fromCameraInfo(info);
+
+          const cv::Mat image = cv_bridge::toCvShare(m_colorImage)->image;
+
+          cv::Mat rect;
+          model.rectifyImage(image, rect); // TODO: insert variable interpolation method? 
+
+          sensor_msgs::ImagePtr rect_msg = cv_bridge::CvImage(m_colorImage->header, m_colorImage->encoding, rect).toImageMsg();
+          m_pub_rect.publish(rect_msg);
+        }
+
         publishPointCloud();
-        // publishPointCloudDirectly();
 
         break;
       }

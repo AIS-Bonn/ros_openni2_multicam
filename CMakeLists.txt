@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project(ros_openni2_multicam)
 
-find_package(catkin REQUIRED COMPONENTS roscpp nodelet image_transport pcl_ros)
+find_package(catkin REQUIRED COMPONENTS roscpp nodelet image_transport image_geometry pcl_ros)
 find_package(Boost COMPONENTS thread)
 find_package(OpenCV REQUIRED) #TODO change this to optional
 

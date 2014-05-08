@@ -42,6 +42,8 @@
 #include <OpenNI.h>
 #include <ros/node_handle.h>
 #include <image_transport/image_transport.h>
+#include <image_geometry/pinhole_camera_model.h>
+#include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #if (defined PCL_MINOR_VERSION && (PCL_MINOR_VERSION >= 7))
@@ -89,6 +91,7 @@ namespace ros_openni2_multicam
       image_transport::ImageTransport m_it;
       image_transport::CameraPublisher m_pub_color;
       image_transport::Publisher m_pub_depth;
+      image_transport::Publisher m_pub_rect;
       ros::Publisher m_pub_cloud;
 
       boost::shared_ptr<ImageMask> m_mask;
