@@ -269,13 +269,6 @@ namespace ros_openni2_multicam
         m_depthImage->data.resize(m_frame.getDataSize());
         memcpy(m_depthImage->data.data(), m_frame.getData(), m_depthImage->data.size());
 
-        for(unsigned int i = 0; i < m_depthImage->width*m_depthImage->height; ++i)
-        {
-          uint16_t* pixel = ((uint16_t*)(m_depthImage->data.data())) + i;
-          if(*pixel < 600)
-            *pixel = 0;
-        }
-
         cv::Mat_<uint16_t> cvImage(m_depthImage->height, m_depthImage->width, reinterpret_cast<uint16_t*>(m_depthImage->data.data()), m_depthImage->step);
         m_mask->maskImage(cvImage);
 
