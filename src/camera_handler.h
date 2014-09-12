@@ -69,6 +69,8 @@ namespace ros_openni2_multicam
 
       static bool isAlreadyOpen(const std::string& uri);
 
+      inline void setFocalLength(double f) { m_focalLength = f; }; 
+
     private:
       sensor_msgs::CameraInfoPtr getDefaultCameraInfo(int width, int height, double f) const;
       bool reset();

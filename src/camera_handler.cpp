@@ -304,6 +304,9 @@ namespace ros_openni2_multicam
         m_colorImage->header.frame_id = m_name + "_rgb_optical_frame";
         m_colorImage->header.stamp = now; // FIXME
 
+        // take focal length as reported by device
+        m_focalLength = (float)m_colorImage->height / (2 * tan(streams[1]->getVerticalFieldOfView() / 2));
+        
         sensor_msgs::CameraInfoPtr info = getDefaultCameraInfo(m_colorImage->width, m_colorImage->height, m_focalLength);
         info->header.frame_id = m_name + "_rgb_optical_frame";
         info->header.stamp = now;

@@ -130,6 +130,13 @@ namespace ros_openni2_multicam
         dev->close();
         return;
       }
+
+      // set some reasonable default camera parameters
+      uint16_t usb_product_id = devices[i].getUsbProductId();
+      if (usb_product_id == 0x0609) // PrimseSense Carmine
+        handler->setFocalLength(574.0527954101562);
+      else if (usb_product_id == 0x0601) // ASUS Xtion
+        handler->setFocalLength(570.3422241210938);
     }
   }
 
